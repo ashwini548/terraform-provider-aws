@@ -34,14 +34,20 @@ func init() {
 	testAccProviders = map[string]*schema.Provider{
 		"aws": testAccProvider,
 	}
+
 	testAccProviderFactories = func(providers *[]*schema.Provider) map[string]func() (*schema.Provider, error) {
-		return map[string]func() (*schema.Provider, error){
-			"aws": func() (*schema.Provider, error) {
-				p := Provider()
-				*providers = append(*providers, p)
+		// this is an SDKV2 compatible hack, the "factory" functions are
+		// effectively singletons for the lifecycle of a resource.Test
+		var providerNames = []string{"aws", "awseast", "awswest", "awsalternate", "awsus-east-1", "awsalternateaccountalternateregion", "awsalternateaccountsameregion", "awssameaccountalternateregion", "awsthird"}
+		var factories = make(map[string]func() (*schema.Provider, error), len(providerNames))
+		for _, name := range providerNames {
+			p := Provider()
+			factories[name] = func() (*schema.Provider, error) {
 				return p, nil
-			},
+			}
+			*providers = append(*providers, p)
 		}
+		return factories
 	}
 	testAccProviderFunc = func() *schema.Provider { return testAccProvider }
 }
@@ -548,9 +554,8 @@ func testAccOrganizationsEnabledPreCheck(t *testing.T) {
 func testAccAlternateAccountProviderConfig() string {
 	//lintignore:AT004
 	return fmt.Sprintf(`
-provider "aws" {
+provider "awsalternate" {
   access_key = %[1]q
-  alias      = "alternate"
   profile    = %[2]q
   secret_key = %[3]q
 }
@@ -560,9 +565,8 @@ provider "aws" {
 func testAccAlternateAccountAlternateRegionProviderConfig() string {
 	//lintignore:AT004
 	return fmt.Sprintf(`
-provider "aws" {
+provider "awsalternate" {
   access_key = %[1]q
-  alias      = "alternate"
   profile    = %[2]q
   region     = %[3]q
   secret_key = %[4]q
@@ -575,23 +579,20 @@ provider "aws" {
 func testAccAlternateAccountAndAlternateRegionProviderConfig() string {
 	//lintignore:AT004
 	return fmt.Sprintf(`
-provider "aws" {
+provider "awsalternateaccountalternateregion" {
   access_key = %[1]q
-  alias      = "alternateaccountalternateregion"
   profile    = %[2]q
   region     = %[3]q
   secret_key = %[4]q
 }
 
-provider "aws" {
+provider "awsalternateaccountsameregion" {
   access_key = %[1]q
-  alias      = "alternateaccountsameregion"
   profile    = %[2]q
   secret_key = %[4]q
 }
 
-provider "aws" {
-  alias  = "sameaccountalternateregion"
+provider "awssameaccountalternateregion" {
   region = %[3]q
 }
 `, os.Getenv("AWS_ALTERNATE_ACCESS_KEY_ID"), os.Getenv("AWS_ALTERNATE_PROFILE"), testAccGetAlternateRegion(), os.Getenv("AWS_ALTERNATE_SECRET_ACCESS_KEY"))
@@ -601,8 +602,7 @@ provider "aws" {
 func testAccAlternateRegionProviderConfig() string {
 	//lintignore:AT004
 	return fmt.Sprintf(`
-provider "aws" {
-  alias  = "alternate"
+provider "awsalternate" {
   region = %[1]q
 }
 `, testAccGetAlternateRegion())
@@ -613,8 +613,7 @@ func testAccMultipleRegionProviderConfig(regions int) string {
 
 	//lintignore:AT004
 	fmt.Fprintf(&config, `
-provider "aws" {
-  alias  = "alternate"
+provider "awsalternate" {
   region = %[1]q
 }
 `, testAccGetAlternateRegion())
@@ -622,8 +621,7 @@ provider "aws" {
 	if regions >= 3 {
 		//lintignore:AT004
 		fmt.Fprintf(&config, `
-provider "aws" {
-  alias  = "third"
+provider "awsthird" {
   region = %[1]q
 }
 `, testAccGetThirdRegion())
@@ -663,8 +661,7 @@ provider "aws" {
 func testAccUsEast1RegionProviderConfig() string {
 	//lintignore:AT004
 	return `
-provider "aws" {
-  alias  = "us-east-1"
+provider "awsus-east-1" {
   region = "us-east-1"
 }
 `
